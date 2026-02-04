@@ -2,10 +2,6 @@ import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime
-import os
-
-export POKEMON_API_KEY="pokeprice_free_b3fea189114d4842fda203435777293bf3f4154baea47f46"
-
 
 # 페이지 설정
 st.set_page_config(
@@ -14,12 +10,15 @@ st.set_page_config(
     layout="wide"
 )
 
+# ============================================
+# 여기에 발급받은 API 키를 입력하세요!
+# ============================================
+API_KEY = "pokeprice_free_b3fea189114d4842fda203435777293bf3f4154baea47f46"
+# ============================================
+
 # 제목
 st.title("🎴 포켓몬 카드 가격 검색")
 st.markdown("포켓몬 카드의 실시간 시장 가격을 확인해보세요!")
-
-# 환경 변수에서 API 키 가져오기
-api_key = os.getenv("POKEMON_API_KEY")
 
 # 사이드바 정보
 st.sidebar.header("📖 사용 방법")
@@ -92,18 +91,22 @@ def get_card_with_history(tcg_player_id, api_key, days=30):
         return None
 
 # 메인 컨텐츠
-if not api_key:
-    st.error("⚠️ API 키가 설정되지 않았습니다. 관리자에게 문의하세요.")
+if not API_KEY or API_KEY == "여기에_발급받은_API_키를_붙여넣으세요":
+    st.error("⚠️ API 키를 설정해주세요!")
     st.info("""
-    **관리자 안내:**
+    **설정 방법:**
     
-    환경 변수 `POKEMON_API_KEY`를 설정해주세요.
+    1. 코드 파일(`pokemon_price_app.py`)을 편집기로 여세요
+    2. 맨 위쪽 15번째 줄 근처에 있는 다음 부분을 찾으세요:
     
-    ```bash
-    export POKEMON_API_KEY="your_api_key_here"
+    ```python
+    API_KEY = "여기에_발급받은_API_키를_붙여넣으세요"
     ```
     
-    또는 Streamlit Cloud에서 Secrets 설정에 추가하세요.
+    3. 따옴표 안에 발급받은 API 키를 붙여넣으세요
+    4. 파일을 저장하고 앱을 다시 실행하세요
+    
+    API 키 발급: [PokemonPriceTracker.com](https://www.pokemonpricetracker.com/sign-up)
     """)
     st.stop()
 
@@ -124,7 +127,7 @@ with col2:
 # 검색 실행
 if search_button and search_query:
     with st.spinner("카드를 검색하는 중..."):
-        results = search_cards(search_query, api_key)
+        results = search_cards(search_query, API_KEY)
         
         if results and results.get("data"):
             cards = results["data"]
@@ -182,7 +185,7 @@ if search_button and search_query:
                 st.markdown("## 📊 카드 상세 정보")
                 
                 with st.spinner("상세 정보를 불러오는 중..."):
-                    detail_data = get_card_with_history(st.session_state.selected_card, api_key, days=30)
+                    detail_data = get_card_with_history(st.session_state.selected_card, API_KEY, days=30)
                     
                     if detail_data and detail_data.get("data"):
                         card_detail = detail_data["data"][0]
