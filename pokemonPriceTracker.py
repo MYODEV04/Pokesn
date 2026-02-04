@@ -6,6 +6,10 @@ import re
 from datetime import datetime
 import time
 
+import sys
+import subprocess
+subprocess.check_call([sys.executable, "-m", "pip", "install", "beautifulsoup4"])
+
 # 페이지 설정
 st.set_page_config(
     page_title="SNKRDUNK 포켓몬 카드 가격 검색",
