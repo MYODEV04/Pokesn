@@ -14,24 +14,38 @@ st.set_page_config(
 st.title("🎴 포켓몬 카드 가격 검색")
 st.markdown("Pokemon TCG API를 통해 포켓몬 카드의 시장 가격과 정보를 확인하세요!")
 
-
 def search_pokemon_cards(query):
     """Pokemon TCG API를 사용하여 카드 검색"""
     try:
         # Pokemon TCG API 엔드포인트
         url = "https://api.pokemontcg.io/v2/cards"
         
-        # 검색 파라미터 (따옴표 제거 - 더 유연한 검색)
-        params = {
-            'q': f'name:{query}*',  # 부분 검색 허용
-            'pageSize': 20  # 최대 20개
-        }
+        # 여러 검색 방법 시도
+        search_attempts = [
+            {'q': f'name:"{query}"'},  # 정확한 검색
+            {'q': f'name:{query}'},     # 따옴표 없이
+            {'q': f'name:*{query}*'},   # 와일드카드
+        ]
         
-        # API 요청 (타임아웃 30초로 증가)
-        response = requests.get(url, params=params, timeout=30)
+        # 첫 단어만 추출 (Detective Pikachu -> Detective)
+        first_word = query.split()[0] if ' ' in query else query
+        if first_word != query:
+            search_attempts.append({'q': f'name:{first_word}'})
         
-        if response.status_code != 200:
-            return None, f"API 오류: {response.status_code}"
+        response = None
+        for params in search_attempts:
+            params['pageSize'] = 20
+            try:
+                response = requests.get(url, params=params, timeout=30)
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'data' in data and len(data['data']) > 0:
+                        break  # 성공하면 루프 종료
+            except:
+                continue
+        
+        if not response or response.status_code != 200:
+            return None, "카드를 찾을 수 없습니다. 포켓몬 이름만 입력해보세요 (예: Pikachu)"
         
         data = response.json()
         
