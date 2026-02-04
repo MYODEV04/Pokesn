@@ -3,6 +3,7 @@ import pandas as pd
 import re
 from datetime import datetime
 import time
+from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -24,18 +25,18 @@ st.markdown("SNKRDUNK에서 포켓몬 카드의 최근 거래가격을 확인해
 # 사이드바
 st.sidebar.header("📖 사용 방법")
 st.sidebar.markdown("""
-1. 포켓몬 이름을 영어로 입력하세요
-2. 카드 번호를 입력하세요 (선택)
-3. 검색 버튼을 클릭하세요
+1. 검색어를 영어로 입력하세요
+2. 검색 버튼을 클릭하세요
 
 ### 🔍 검색 예시
-- **이름**: Pikachu
-- **번호**: 025
-- **이름 + 번호**: Charizard 006
+- **포켓몬 이름**: Pikachu
+- **특정 카드**: Detective Pikachu SV-P 098
+- **세트 번호**: Charizard 006
+- **일반 검색**: Mewtwo
 
 ### 💡 팁
 - 영어 이름으로 검색하세요
-- 카드 번호는 선택사항입니다
+- 카드 번호를 함께 입력하면 더 정확해요
 - 첫 검색은 시간이 걸릴 수 있습니다
 """)
 
@@ -61,15 +62,13 @@ def get_driver():
     driver = webdriver.Chrome(options=options)
     return driver
 
-def search_snkrdunk_pokemon_selenium(pokemon_name, card_number=None):
+def search_snkrdunk_pokemon_selenium(pokemon_name):
     """Selenium을 사용하여 SNKRDUNK에서 포켓몬 카드 검색"""
     try:
         driver = get_driver()
         
-        # 검색어 생성
+        # 검색어 사용
         search_query = pokemon_name
-        if card_number:
-            search_query = f"{pokemon_name} {card_number}"
         
         # SNKRDUNK 검색 URL
         search_url = f"https://snkrdunk.com/en/search?q={search_query.replace(' ', '+')}"
@@ -92,7 +91,6 @@ def search_snkrdunk_pokemon_selenium(pokemon_name, card_number=None):
         page_source = driver.page_source
         
         # BeautifulSoup으로 파싱
-        from bs4 import BeautifulSoup
         soup = BeautifulSoup(page_source, 'html.parser')
         
         cards = []
@@ -197,23 +195,16 @@ def calculate_average_price(prices):
     return sum(valid_prices) / len(valid_prices)
 
 # 메인 컨텐츠
-col1, col2, col3 = st.columns([2, 1, 1])
+col1, col2 = st.columns([3, 1])
 
 with col1:
     pokemon_name = st.text_input(
-        "🔍 포켓몬 이름 (영어)",
-        placeholder="예: Pikachu, Charizard, Mewtwo",
-        help="영어로 포켓몬 이름을 입력하세요"
+        "🔍 검색어 (포켓몬 이름 또는 카드 번호 포함)",
+        placeholder="예: Pikachu, Detective Pikachu SV-P 098, Charizard 006",
+        help="영어로 포켓몬 이름을 입력하세요. 카드 번호도 함께 입력 가능합니다."
     )
 
 with col2:
-    card_number = st.text_input(
-        "🔢 카드 번호 (선택)",
-        placeholder="예: 025",
-        help="카드 번호를 입력하세요 (선택사항)"
-    )
-
-with col3:
     st.markdown("<br>", unsafe_allow_html=True)
     search_button = st.button("검색", type="primary", use_container_width=True)
 
@@ -228,7 +219,7 @@ st.info("""
 # 검색 실행
 if search_button and pokemon_name:
     with st.spinner("🔍 카드를 검색하는 중... (최대 15초 소요)"):
-        cards, error = search_snkrdunk_pokemon_selenium(pokemon_name, card_number)
+        cards, error = search_snkrdunk_pokemon_selenium(pokemon_name)
         
         if error:
             st.error(f"⚠️ {error}")
@@ -307,7 +298,7 @@ if search_button and pokemon_name:
                         st.metric("최고 가격", f"¥{int(max(valid_prices)):,}")
 
 elif search_button and not pokemon_name:
-    st.warning("포켓몬 이름을 입력해주세요!")
+    st.warning("검색어를 입력해주세요!")
 
 # 수동 입력 섹션
 st.markdown("---")
