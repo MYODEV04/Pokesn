@@ -90,7 +90,7 @@ def search_snkrdunk_pokemon_selenium(pokemon_name):
         # 페이지 소스 가져오기
         page_source = driver.page_source
         
-        # BeautifulSoup으로 파싱
+        # BeautifulSoup으로 파싱 (html.parser 사용 - 더 안정적)
         soup = BeautifulSoup(page_source, 'html.parser')
         
         cards = []
@@ -106,16 +106,24 @@ def search_snkrdunk_pokemon_selenium(pokemon_name):
         
         card_elements = []
         for selector in possible_selectors:
-            if selector['class']:
-                elements = soup.find_all(selector['tag'], class_=re.compile(selector['class'], re.I))
-            elif selector.get('attrs'):
-                elements = soup.find_all(selector['tag'], attrs=selector['attrs'])
-            else:
-                elements = soup.find_all(selector['tag'])
-            
-            if elements:
-                card_elements = elements[:20]  # 최대 20개
-                break
+            elements = []
+            try:
+                if selector.get('class'):
+                    # class 속성으로 검색
+                    elements = soup.find_all(selector['tag'], class_=selector['class'])
+                    # 정규식으로도 시도
+                    if not elements:
+                        elements = soup.find_all(selector['tag'], attrs={'class': re.compile(selector['class'], re.I)})
+                elif selector.get('attrs'):
+                    elements = soup.find_all(selector['tag'], attrs=selector['attrs'])
+                else:
+                    elements = soup.find_all(selector['tag'])
+                
+                if elements:
+                    card_elements = elements[:20]  # 최대 20개
+                    break
+            except Exception as e:
+                continue
         
         # 카드 정보 추출
         for item in card_elements:
