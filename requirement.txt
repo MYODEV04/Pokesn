@@ -1,18 +1,5 @@
-streamlit>=1.28.0
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-pandas>=2.0.0
-lxml>=4.9.0
-
 streamlit
 requests
 beautifulsoup4
 pandas
 lxml
-```
-
-**파일 구조:**
-```
-your-app-folder/
-├── pokemonPriceTracker.py  (또는 앱 파일명)
-└── requirements.txt  (새로 만들기)
