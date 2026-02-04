@@ -23,9 +23,9 @@ def get_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
 
 
 # -----------------------------
-# 1) SNKRDUNK API - 다양한 파라미터로 검색
+# 1) SNKRDUNK API - 포켓몬 카드 전용 검색
 # -----------------------------
-def search_by_character_and_set(
+def search_pokemon_cards(
     character_name: str = "",
     set_name: str = "",
     card_number: str = "",
@@ -33,8 +33,8 @@ def search_by_character_and_set(
     per_page: int = 20
 ) -> Dict[str, Any]:
     """
+    포켓몬 카드만 검색 (brandId=pokemon 사용)
     캐릭터명, 세트명, 카드번호로 검색
-    여러 파라미터 조합을 시도하여 결과를 찾음
     """
     
     # 검색 키워드 조합
@@ -55,11 +55,11 @@ def search_by_character_and_set(
             "data": None
         }
     
-    # 여러 API 엔드포인트 및 파라미터 조합 시도
+    # 포켓몬 전용 API 엔드포인트 시도
     attempts = [
-        # 시도 1: 기본 keyword 파라미터
+        # 시도 1: brands/pokemon 경로 사용
         {
-            "url": "https://snkrdunk.com/en/v1/trading-cards",
+            "url": "https://snkrdunk.com/en/v1/brands/pokemon/trading-cards",
             "params": {
                 "keyword": keyword,
                 "page": page,
@@ -67,65 +67,68 @@ def search_by_character_and_set(
                 "sortType": "popular"
             }
         },
-        # 시도 2: 개별 파라미터
+        # 시도 2: brandId 파라미터 사용
         {
             "url": "https://snkrdunk.com/en/v1/trading-cards",
             "params": {
-                "characterName": character_name,
-                "setName": set_name,
-                "number": card_number,
+                "brandId": "pokemon",
+                "keyword": keyword,
+                "page": page,
+                "perPage": per_page,
+                "sortType": "popular"
+            }
+        },
+        # 시도 3: brand 파라미터
+        {
+            "url": "https://snkrdunk.com/en/v1/trading-cards",
+            "params": {
+                "brand": "pokemon",
+                "keyword": keyword,
                 "page": page,
                 "perPage": per_page
             }
         },
-        # 시도 3: q 파라미터
+        # 시도 4: categoryId 25 (포켓몬 카테고리로 추정)
         {
             "url": "https://snkrdunk.com/en/v1/trading-cards",
             "params": {
+                "categoryId": "25",
+                "keyword": keyword,
+                "page": page,
+                "perPage": per_page
+            }
+        },
+        # 시도 5: q 파라미터 + brandId
+        {
+            "url": "https://snkrdunk.com/en/v1/trading-cards",
+            "params": {
+                "brandId": "pokemon",
                 "q": keyword,
                 "page": page,
                 "perPage": per_page
             }
         },
-        # 시도 4: search 파라미터
+        # 시도 6: 검색어에 Pokemon 추가
         {
             "url": "https://snkrdunk.com/en/v1/trading-cards",
             "params": {
-                "search": keyword,
+                "keyword": f"Pokemon {keyword}",
                 "page": page,
-                "limit": per_page
+                "perPage": per_page,
+                "sortType": "popular"
             }
         },
-        # 시도 5: name 파라미터
+        # 시도 7: name 파라미터 + brandId
         {
             "url": "https://snkrdunk.com/en/v1/trading-cards",
             "params": {
+                "brandId": "pokemon",
                 "name": keyword,
                 "page": page,
                 "perPage": per_page
             }
         },
-        # 시도 6: 캐릭터명만
-        {
-            "url": "https://snkrdunk.com/en/v1/trading-cards",
-            "params": {
-                "character": character_name,
-                "page": page,
-                "perPage": per_page
-            }
-        } if character_name else None,
-        # 시도 7: 파라미터 없이 (전체 목록)
-        {
-            "url": "https://snkrdunk.com/en/v1/trading-cards",
-            "params": {
-                "page": page,
-                "perPage": per_page
-            }
-        },
     ]
-    
-    # None 제거
-    attempts = [a for a in attempts if a is not None]
     
     errors = []
     
@@ -139,22 +142,28 @@ def search_by_character_and_set(
             # 결과가 있는지 확인
             items = extract_cards_from_response(result)
             
-            if items:  # 결과가 있으면 성공
+            # 포켓몬 카드만 필터링
+            pokemon_items = filter_pokemon_only(items)
+            
+            if pokemon_items:  # 포켓몬 카드가 있으면 성공
                 return {
                     "success": True,
                     "data": result,
+                    "filtered_items": pokemon_items,
                     "endpoint": attempt["url"],
                     "params": cleaned_params,
                     "attempt_number": idx,
-                    "items_count": len(items)
+                    "items_count": len(pokemon_items),
+                    "original_count": len(items)
                 }
             else:
-                # 결과는 받았지만 아이템이 없음
+                # 결과는 받았지만 포켓몬 카드가 없음
                 errors.append({
                     "attempt": idx,
                     "url": attempt["url"],
                     "params": cleaned_params,
-                    "status": "no_items",
+                    "status": "no_pokemon_items",
+                    "total_items": len(items),
                     "response_keys": list(result.keys()) if isinstance(result, dict) else None
                 })
                 
@@ -172,6 +181,64 @@ def search_by_character_and_set(
         "errors": errors,
         "total_attempts": len(attempts)
     }
+
+
+def filter_pokemon_only(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    포켓몬 카드만 필터링 (원피스, 유희왕 등 제외)
+    """
+    if not cards:
+        return []
+    
+    # 원피스 관련 키워드 (제외할 것들)
+    exclude_keywords = [
+        "one piece", "onepiece", "ワンピース", 
+        "luffy", "zoro", "nami", "sanji", "chopper",
+        "monkey d", "roronoa", "god's island",
+        "romance dawn", "paramount war", "nico robin",
+        "yu-gi-oh", "yugioh", "遊戯王",
+        "magic the gathering", "mtg",
+        "digimon", "デジモン"
+    ]
+    
+    # 포켓몬 관련 키워드 (확실한 것만 포함)
+    pokemon_keywords = [
+        "pokemon", "pokémon", "ポケモン", "ポケカ",
+        "pikachu", "charizard", "eevee", "mewtwo",
+        "scarlet", "violet", "sword", "shield",
+        "vmax", "vstar", "ex", "gx", "trainer"
+    ]
+    
+    filtered = []
+    
+    for card in cards:
+        # 카드 전체 텍스트를 JSON으로 변환하여 검색
+        card_text = json.dumps(card, ensure_ascii=False).lower()
+        
+        # 제외 키워드가 있으면 스킵
+        has_exclude = any(keyword in card_text for keyword in exclude_keywords)
+        if has_exclude:
+            continue
+        
+        # 포켓몬 키워드가 있으면 포함
+        has_pokemon = any(keyword in card_text for keyword in pokemon_keywords)
+        
+        # 브랜드나 카테고리 정보 확인
+        brand_info = card.get("brand", {})
+        if isinstance(brand_info, dict):
+            brand_name = brand_info.get("name", "").lower()
+            if "pokemon" in brand_name or "pokémon" in brand_name:
+                has_pokemon = True
+        
+        # 세트명 확인
+        set_name = card.get("setName", "").lower()
+        if "pokemon" in set_name or "pokémon" in set_name:
+            has_pokemon = True
+        
+        if has_pokemon:
+            filtered.append(card)
+    
+    return filtered
 
 
 # -----------------------------
@@ -325,6 +392,9 @@ st.set_page_config(page_title="SNKRDUNK 포켓몬 카드 검색", layout="wide")
 st.title("🃏 SNKRDUNK 포켓몬 카드 검색기")
 st.markdown("### 캐릭터명과 카드팩으로 포켓몬 카드를 검색하세요")
 
+# 경고 메시지
+st.info("✨ **업데이트**: 이제 포켓몬 카드만 정확하게 필터링됩니다! (원피스 카드 제외)")
+
 # 사이드바
 with st.sidebar:
     st.header("🔍 검색 옵션")
@@ -350,7 +420,7 @@ with st.sidebar:
         set_name = st.text_input(
             "📦 카드팩 이름 (선택)",
             value="",
-            placeholder="예: Detective Pikachu, Scarlet Violet",
+            placeholder="예: Scarlet Violet, 151",
             help="특정 카드팩에서만 검색하려면 입력하세요"
         )
         
@@ -374,13 +444,13 @@ with st.sidebar:
             
             **세트 내 검색:**
             - 캐릭터명: `Pikachu`
-            - 카드팩: `Detective Pikachu`
+            - 카드팩: `Scarlet Violet`
             - 번호: (비움)
             
             **정확한 카드:**
-            - 캐릭터명: `Pikachu`
-            - 카드팩: `Scarlet Violet`
-            - 번호: `025`
+            - 캐릭터명: `Charizard`
+            - 카드팩: `151`
+            - 번호: `006`
             
             **인기 캐릭터:**
             - Pikachu (피카츄)
@@ -388,13 +458,14 @@ with st.sidebar:
             - Eevee (이브이)
             - Mewtwo (뮤츠)
             - Umbreon (블래키)
+            - Gengar (팬텀)
             
             **인기 카드팩:**
-            - Detective Pikachu
             - Scarlet Violet
             - 151
             - Crown Zenith
             - Silver Tempest
+            - Fusion Strike
             """)
     
     else:  # Card ID 직접 입력
@@ -428,9 +499,9 @@ if search_button:
             st.error("❌ 캐릭터명, 카드팩 이름, 또는 카드 번호 중 최소 하나는 입력해주세요!")
             st.stop()
         
-        with st.spinner(f"검색 중... 여러 방법을 시도하고 있어요!"):
+        with st.spinner(f"🔎 포켓몬 카드 검색 중... 여러 방법을 시도하고 있어요!"):
             # 검색 API 호출
-            search_result = search_by_character_and_set(
+            search_result = search_pokemon_cards(
                 character_name=character_name,
                 set_name=set_name,
                 card_number=card_number,
@@ -438,7 +509,7 @@ if search_button:
             )
             
             if not search_result.get("success"):
-                st.error("❌ 검색 실패 - 결과를 찾을 수 없습니다")
+                st.error("❌ 검색 실패 - 포켓몬 카드를 찾을 수 없습니다")
                 
                 st.markdown("""
                 **다음을 시도해보세요:**
@@ -455,7 +526,11 @@ if search_button:
                 st.stop()
             
             # 검색 성공!
-            st.success(f"✅ 검색 성공! ({search_result.get('items_count', 0)}개 카드 발견)")
+            st.success(f"✅ 검색 성공! ({search_result.get('items_count', 0)}개 포켓몬 카드 발견)")
+            
+            if search_result.get('original_count', 0) > search_result.get('items_count', 0):
+                filtered_out = search_result['original_count'] - search_result['items_count']
+                st.caption(f"🚫 {filtered_out}개의 다른 카드(원피스 등)는 자동으로 제외되었습니다")
             
             if show_debug:
                 st.caption(f"엔드포인트: {search_result.get('endpoint')}")
@@ -463,19 +538,17 @@ if search_button:
                 with st.expander("사용된 파라미터"):
                     st.json(search_result.get('params'))
             
-            # 카드 목록 추출
-            cards = extract_cards_from_response(search_result["data"])
+            # 필터링된 포켓몬 카드 목록
+            cards = search_result.get("filtered_items", [])
             
             if not cards:
-                st.warning("⚠️ API 응답은 받았지만 카드 데이터를 파싱할 수 없습니다")
-                if show_raw_json:
-                    st.json(search_result["data"])
+                st.warning("⚠️ 포켓몬 카드를 찾을 수 없습니다")
                 st.stop()
             
-            st.info(f"📊 총 {len(cards)}개의 카드를 찾았습니다")
+            st.info(f"📊 총 {len(cards)}개의 포켓몬 카드를 찾았습니다")
             
             # 카드 목록 표시
-            st.subheader("📋 검색 결과")
+            st.subheader("📋 검색 결과 (포켓몬 카드만)")
             
             for idx, card in enumerate(cards[:15], 1):  # 최대 15개 표시
                 with st.expander(f"🃏 #{idx} - {card.get('name', card.get('title', '이름 없음'))}", expanded=(idx <= 3)):
@@ -593,8 +666,11 @@ if 'selected_card_id' in st.session_state:
                 related_data = get_related_single_cards(selected_id)
                 related_cards = extract_cards_from_response(related_data)
                 
+                # 관련 카드도 포켓몬만 필터링
+                related_cards = filter_pokemon_only(related_cards)
+                
                 if related_cards:
-                    st.subheader(f"🔗 관련 카드 ({len(related_cards)}개)")
+                    st.subheader(f"🔗 관련 포켓몬 카드 ({len(related_cards)}개)")
                     
                     # 그리드 형식
                     cols = st.columns(3)
@@ -612,7 +688,7 @@ if 'selected_card_id' in st.session_state:
                                     st.session_state['selected_card_id'] = related_id
                                     st.rerun()
                 else:
-                    st.info("💡 관련 카드가 없습니다")
+                    st.info("💡 관련 포켓몬 카드가 없습니다")
                 
                 if show_raw_json:
                     with st.expander("📄 Raw JSON - Related Cards"):
@@ -656,5 +732,6 @@ st.markdown("""
 <div style='text-align: center; color: gray; padding: 20px;'>
     <p>💡 <b>Tip:</b> 캐릭터명만 입력해도 검색됩니다!</p>
     <p>🔧 여러 API 조합을 자동으로 시도하여 최적의 결과를 찾습니다</p>
+    <p>✨ 포켓몬 카드만 정확하게 필터링됩니다 (원피스 카드 자동 제외)</p>
 </div>
 """, unsafe_allow_html=True)
