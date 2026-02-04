@@ -14,21 +14,6 @@ st.set_page_config(
 st.title("🎴 포켓몬 카드 가격 검색")
 st.markdown("Pokemon TCG API를 통해 포켓몬 카드의 시장 가격과 정보를 확인하세요!")
 
-# 사이드바
-st.sidebar.header("📖 사용 방법")
-st.sidebar.markdown("""
-1. 검색어를 입력하세요
-2. 검색 버튼을 클릭하세요
-
-### 🔍 검색 예시
-- **포켓몬 이름**: Pikachu
-- **특정 카드**: Charizard VMAX
-- **세트 이름**: Base Set
-
-### 💡 팁
-- 영어 이름으로 검색하세요
-- 정확한 카드명일수록 좋아요
-""")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
@@ -44,14 +29,14 @@ def search_pokemon_cards(query):
         # Pokemon TCG API 엔드포인트
         url = "https://api.pokemontcg.io/v2/cards"
         
-        # 검색 파라미터
+        # 검색 파라미터 (따옴표 제거 - 더 유연한 검색)
         params = {
-            'q': f'name:"{query}"',  # 카드 이름으로 검색
+            'q': f'name:{query}*',  # 부분 검색 허용
             'pageSize': 20  # 최대 20개
         }
         
-        # API 요청
-        response = requests.get(url, params=params, timeout=10)
+        # API 요청 (타임아웃 30초로 증가)
+        response = requests.get(url, params=params, timeout=30)
         
         if response.status_code != 200:
             return None, f"API 오류: {response.status_code}"
@@ -105,9 +90,11 @@ def search_pokemon_cards(query):
         return cards, None
         
     except requests.exceptions.Timeout:
-        return None, "요청 시간 초과"
+        return None, "API 응답이 느립니다. 잠시 후 다시 시도해주세요."
     except requests.exceptions.ConnectionError:
-        return None, "인터넷 연결을 확인해주세요"
+        return None, "인터넷 연결을 확인해주세요."
+    except requests.exceptions.RequestException as e:
+        return None, f"네트워크 오류: {str(e)}"
     except Exception as e:
         return None, f"오류 발생: {str(e)}"
 
@@ -261,36 +248,3 @@ if search_button and search_query:
 elif search_button and not search_query:
     st.warning("검색어를 입력해주세요!")
 
-# 인기 카드 추천
-with st.expander("🔥 인기 포켓몬 카드 추천"):
-    st.markdown("""
-    ### 검색해볼 만한 인기 카드들
-    
-    **클래식 카드:**
-    - Charizard (리자몽)
-    - Pikachu (피카츄)
-    - Mewtwo (뮤츠)
-    - Blastoise (거북왕)
-    - Venusaur (이상해꽃)
-    
-    **최근 인기 카드:**
-    - Charizard VMAX
-    - Pikachu VMAX
-    - Umbreon VMAX
-    - Rayquaza VMAX
-    - Lugia
-    
-    **레어 카드:**
-    - Shadowless Charizard
-    - 1st Edition
-    - Full Art cards
-    """)
-
-# 푸터
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: gray;'>
-    <p>데이터 출처: <a href='https://pokemontcg.io/' target='_blank'>Pokemon TCG API</a></p>
-    <p>🎴 실시간 시장 가격 정보 제공 | 💳 CardMarket & TCGPlayer 데이터</p>
-</div>
-""", unsafe_allow_html=True)
